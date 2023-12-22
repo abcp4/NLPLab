@@ -356,30 +356,30 @@ def get_tokenizer(dataset,num_tokenizer_train_items,vocab_size,tokenizer_path,mo
    
     #tokenizer HF bert
     ## Train tokenizer
-    tokenizer = BertWordPieceTokenizer()
-    tokenizer._tokenizer.normalizer = normalizers.Sequence(
-        [
-            normalizers.Replace(Regex("(``|'')"), '"'),
-            normalizers.NFD(),
-            normalizers.Lowercase(),
-            normalizers.StripAccents(),
-            normalizers.Replace(Regex(" {2,}"), " "),
-            normalizers.Replace(Regex(r"[^\x00-\x7F]+"), ""),
-        ]
-    )  # Normalizer based on, https://github.com/JonasGeiping/cramming/blob/50bd06a65a4cd4a3dd6ee9ecce1809e1a9085374/cramming/data/tokenizer_preparation.py#L52
-    with MagicTimer() as timer:
-        tokenizer.train_from_iterator(
-            tokenizer_training_data(dataset,num_tokenizer_train_items,len(dataset)),
-            vocab_size=vocab_size,
-            min_frequency=2,
-        )
-    print(f"Tokenizer trained in {timer}.")
-    tokenizer.save(str(tokenizer_path))
-    tokenizer = BertTokenizerFast(tokenizer_file=str(tokenizer_path))
+    # tokenizer = BertWordPieceTokenizer()
+    # tokenizer._tokenizer.normalizer = normalizers.Sequence(
+    #     [
+    #         normalizers.Replace(Regex("(``|'')"), '"'),
+    #         normalizers.NFD(),
+    #         normalizers.Lowercase(),
+    #         normalizers.StripAccents(),
+    #         normalizers.Replace(Regex(" {2,}"), " "),
+    #         normalizers.Replace(Regex(r"[^\x00-\x7F]+"), ""),
+    #     ]
+    # )  # Normalizer based on, https://github.com/JonasGeiping/cramming/blob/50bd06a65a4cd4a3dd6ee9ecce1809e1a9085374/cramming/data/tokenizer_preparation.py#L52
+    # with MagicTimer() as timer:
+    #     tokenizer.train_from_iterator(
+    #         tokenizer_training_data(dataset,num_tokenizer_train_items,len(dataset)),
+    #         vocab_size=vocab_size,
+    #         min_frequency=2,
+    #     )
+    # print(f"Tokenizer trained in {timer}.")
+    # tokenizer.save(str(tokenizer_path))
+    # tokenizer = BertTokenizerFast(tokenizer_file=str(tokenizer_path))
 
     #load bert one
-    # from transformers import AutoTokenizer
-    # tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
 
     if model_training=='none':
         return dataset,norm,vocab
