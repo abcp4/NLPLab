@@ -4,3 +4,5 @@ berts/data/
 berts/models/
 berts/bert-finetuned-squad/
 berts/wandb/
+DensePhrasesMinimal/result_models
+DensePhrasesMinimal/results
