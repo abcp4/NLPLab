@@ -343,7 +343,7 @@ def get_vocab():
     return norm,vocab
 
 
-def get_tokenizer(dataset,num_tokenizer_train_items,vocab_size,tokenizer_path,model_training,model_max_seq_len,tok_type='hf'):
+def get_tokenizer(dataset,num_tokenizer_train_items,vocab_size,tokenizer_path,model_training,model_max_seq_len,tok_type='hf',tokenizer_name='bert-base-uncased'):
     
     #tokenmonster
     norm,vocab=get_vocab()
@@ -379,7 +379,7 @@ def get_tokenizer(dataset,num_tokenizer_train_items,vocab_size,tokenizer_path,mo
 
     #load bert one
     from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     if model_training=='none':
         return dataset,norm,vocab
