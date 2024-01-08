@@ -10,11 +10,9 @@ from collections import deque
 from torch.nn import CrossEntropyLoss
 from torch.nn.functional import binary_cross_entropy_with_logits, embedding, one_hot, softmax, log_softmax, dropout
 from transformers import PreTrainedModel
-import os
 
 logger = logging.getLogger(__name__)
 
-os.environ["WANDB_DISABLED"] = "true"
 
 class Encoder(PreTrainedModel):
     base_model_prefix='densephrases'
@@ -45,7 +43,6 @@ class Encoder(PreTrainedModel):
                  lambda_kl=0.0,
                  lambda_neg=0.0,
                  lambda_flt=0.0,
-                 lambda_his_neg=0.0,
                  pbn_size=0,
                  return_phrase=False,
                  return_query=False):
@@ -58,7 +55,6 @@ class Encoder(PreTrainedModel):
         # Arguments
         self.lambda_kl = lambda_kl
         self.lambda_neg = lambda_neg
-        self.lambda_his_neg = lambda_his_neg #TODO
         self.lambda_flt = lambda_flt
         self.return_phrase = return_phrase
         self.return_query = return_query
@@ -153,7 +149,6 @@ class Encoder(PreTrainedModel):
         self,
         input_ids=None, attention_mask=None, token_type_ids=None,
         input_ids_=None, attention_mask_=None, token_type_ids_=None,
-        input_ids_previous_question=None, attention_mask_previous_question=None, token_type_ids_previous_question=None, # TODO
         start_positions=None, end_positions=None,
         neg_input_ids=None, neg_attention_mask=None, neg_token_type_ids=None,
         example_id=None,
@@ -180,21 +175,9 @@ class Encoder(PreTrainedModel):
         if input_ids_ is not None:
             assert len(input_ids_.size()) == 2
             query_start, query_end = self.embed_query(input_ids_, attention_mask_, token_type_ids_)
-            #logger.info("query_start[0]: {}".format(query_start[0]))
-            logger.info("input_ids_: {}".format(self.tokenizer.decode(input_ids_[0])))
 
             if self.return_query:
                 return (query_start, query_end)
-
-        # TODO: Previous Query
-        if input_ids_previous_question is not None:
-            #import pdb; pdb.set_trace()
-            assert len(input_ids_previous_question.size()) == 2
-            query_start_previous_question, query_end_previous_question = self.embed_query(input_ids_previous_question, attention_mask_previous_question, token_type_ids_previous_question)
-            # torch.Size([24, 1, 768])
-            #logger.info("query_start_previous_question[0]: {}".format(query_start_previous_question[0]))
-            logger.info("input_ids_previous_question: {}".format(self.tokenizer.decode(input_ids_previous_question[0])))
-            #import pdb; pdb.set_trace()
 
         # Gather distributed reps
         if dist.is_initialized() and self.training:
@@ -205,9 +188,6 @@ class Encoder(PreTrainedModel):
             qe_list = [torch.zeros_like(query_end) for _ in range(dist.get_world_size())]
             sp_list = [torch.zeros_like(start_positions) for _ in range(dist.get_world_size())]
             ep_list = [torch.zeros_like(end_positions) for _ in range(dist.get_world_size())]
-            # TODO
-            qs_previous_question_list = [torch.zeros_like(query_start_previous_question) for _ in range(dist.get_world_size())]
-            qe_previous_question_list = [torch.zeros_like(query_end_previous_question) for _ in range(dist.get_world_size())]            
 
             # Allgather
             dist.all_gather(tensor_list=ps_list, tensor=start.contiguous())
@@ -216,9 +196,6 @@ class Encoder(PreTrainedModel):
             dist.all_gather(tensor_list=qe_list, tensor=query_end.contiguous())
             dist.all_gather(tensor_list=sp_list, tensor=start_positions.contiguous())
             dist.all_gather(tensor_list=ep_list, tensor=end_positions.contiguous())
-            # TODO
-            dist.all_gather(tensor_list=qs_previous_question_list, tensor=query_start_previous_question.contiguous())
-            dist.all_gather(tensor_list=qe_previous_question_list, tensor=query_end_previous_question.contiguous())            
 
             # Since allgather results do not have gradients, we replace the
             # current process's corresponding embeddings with original tensors
@@ -226,9 +203,6 @@ class Encoder(PreTrainedModel):
             pe_list[dist.get_rank()] = end
             qs_list[dist.get_rank()] = query_start
             qe_list[dist.get_rank()] = query_end
-            # TODO
-            qs_previous_question_list[dist.get_rank()] = query_start_previous_question
-            qe_previous_question_list[dist.get_rank()] = query_end_previous_question
 
             # Get full batch embeddings: (bs x N, hidden)
             all_start = torch.cat(ps_list, 0)
@@ -237,10 +211,6 @@ class Encoder(PreTrainedModel):
             all_query_end = torch.cat(qe_list, 0)
             all_start_positions = torch.cat(sp_list, 0)
             all_end_positions = torch.cat(ep_list, 0)
-            # TODO _previous_question
-            all_query_start_previous_question = torch.cat(qs_previous_question_list, 0)
-            all_query_end_previous_question = torch.cat(qe_previous_question_list, 0)            
-
             if neg_input_ids is not None:
                 nps_list = [torch.zeros_like(neg_start) for _ in range(dist.get_world_size())]
                 npe_list = [torch.zeros_like(neg_end) for _ in range(dist.get_world_size())]
@@ -257,23 +227,14 @@ class Encoder(PreTrainedModel):
             all_query_end = query_end
             all_start_positions = start_positions
             all_end_positions = end_positions
-            # TODO _previous_question
-            if self.lambda_his_neg > 0:
-                all_query_start_previous_question = query_start_previous_question
-                all_query_end_previous_question = query_end_previous_question
-
             if neg_input_ids is not None:
                 all_neg_start = neg_start
                 all_neg_end = neg_end
 
         # Get dense logits
-        start_logits = start.matmul(query_start.transpose(1, 2)).squeeze(-1) # torch.Size([24, 384])
+        start_logits = start.matmul(query_start.transpose(1, 2)).squeeze(-1)
         end_logits = end.matmul(query_end.transpose(1, 2)).squeeze(-1)
         dense_logits = start_logits.unsqueeze(2) + end_logits.unsqueeze(1)
-        # TODO _previous_question
-        # start_previous_question_logits = start.matmul(query_start_previous_question.transpose(1, 2)).squeeze(-1)
-        # end_previous_question_logits = end.matmul(query_end_previous_question.transpose(1, 2)).squeeze(-1)
-        # import pdb; pdb.set_trace()
 
         # get hard negative logits (dynamic max per batch idx)
         if neg_input_ids is not None:
@@ -300,7 +261,6 @@ class Encoder(PreTrainedModel):
                     )
 
             # Phrase-level in-batch
-            # torch.Size([24, 1, 768])
             gold_start = torch.stack(
                 [st[start_pos:start_pos+1] if start_pos > 0 else st[0:1]
                     for st, start_pos in zip(all_start, all_start_positions)]
@@ -309,24 +269,12 @@ class Encoder(PreTrainedModel):
                 [en[end_pos:end_pos+1] if end_pos > 0 else en[0:1]
                     for en, end_pos in zip(all_end, all_end_positions)]
             )
-            # torch.Size([24, 24])
             inb_start_logits = (all_query_start.unsqueeze(1) * gold_start.unsqueeze(0)).sum(-1).view(
                 all_query_start.shape[0], -1
             )
             inb_end_logits = (all_query_end.unsqueeze(1) * gold_end.unsqueeze(0)).sum(-1).view(
                 all_query_end.shape[0], -1
             )
-
-            # TODO: similarity calculation between current history and previous query
-            # torch.Size([24, 24])
-            if self.lambda_his_neg > 0:
-                inb_start_hisContra_logits = (all_query_start.unsqueeze(1) * all_query_start_previous_question.unsqueeze(0)).sum(-1).view(
-                    all_query_start.shape[0], -1
-                )           
-                inb_end_hisContra_logits = (all_query_end.unsqueeze(1) * all_query_end_previous_question.unsqueeze(0)).sum(-1).view(
-                    all_query_end.shape[0], -1
-                )
-                #import pdb; pdb.set_trace() 
 
             if neg_input_ids is not None:
                 inb_start_logits = torch.cat((inb_start_logits, neg_start_logits), dim=1)
@@ -336,8 +284,6 @@ class Encoder(PreTrainedModel):
                 inb_start_logits = torch.cat((inb_start_logits, pinb_start_logits), dim=1)
                 inb_end_logits = torch.cat((inb_end_logits, pinb_end_logits), dim=1)
 
-            #import pdb; pdb.set_trace()
-            
         # Merge logits
         outputs = (start_logits, end_logits, filter_start_logits, filter_end_logits)
 
@@ -401,8 +347,6 @@ class Encoder(PreTrainedModel):
                     log_softmax(end_logits, dim=1), target=softmax(end_logits_qd[:,:end_logits.size(1)], dim=1)
                 ).sum(1)).mean(0)
                 total_loss = total_loss + (kl_start + kl_end)/2.0 * self.lambda_kl
-                #logger.info('(kl_start + kl_end)/2.0: {}'.format(((kl_start + kl_end)/2.0).item()))
-                logger.info('(kl_start + kl_end)/2.0  * self.lambda_kl : {}'.format((((kl_start + kl_end)/2.0) * self.lambda_kl).item()))
                 # outputs = (start_logits_qd, end_logits_qd, filter_start_logits, filter_end_logits) # test cross encoder
 
             # 3) Batch-negative loss
@@ -417,8 +361,6 @@ class Encoder(PreTrainedModel):
                 inb_end_loss = inb_loss_fct(inb_end_logits, inb_e_target)
                 inb_se_loss = (inb_start_loss + inb_end_loss) / 2
                 total_loss = total_loss + inb_se_loss * self.lambda_neg
-                #logger.info('inb_se_loss: {}'.format(inb_se_loss.item()))
-                logger.info('inb_se_loss * self.lambda_neg: {}'.format((inb_se_loss * self.lambda_neg).item()))
 
             # 4) Filter loss
             if self.lambda_flt > 0:
@@ -439,28 +381,6 @@ class Encoder(PreTrainedModel):
                 ans_mask = (start_positions > 0).float()
                 filter_loss = (filter_loss * ans_mask).sum() / (ans_mask.sum() + 1e-9)
                 total_loss = total_loss + filter_loss * self.lambda_flt
-                #logger.info('filter_loss: {}'.format(filter_loss.item()))
-                logger.info('filter_loss * self.lambda_flt: {}'.format((filter_loss* self.lambda_flt).item()))
-            
-            # TODO) history negative loss
-            # 5) history negative loss
-            if self.lambda_his_neg > 0:
-                inb_hisContra_ignored_index = all_query_start_previous_question.size(0)
-                inb_hisContra_s_target = torch.arange(all_query_start_previous_question.size(0)).to(self.device)
-                inb_hisContra_e_target = torch.arange(all_query_end_previous_question.size(0)).to(self.device)
-
-                # TODO) contra learning between current question and previous question
-                inb_hisContra_loss_fct = CrossEntropyLoss()
-                
-                # TODO) pairwise similarity with matul
-                inb_start_hisContra_loss = inb_hisContra_loss_fct(inb_start_hisContra_logits, inb_hisContra_s_target)
-                inb_end_hisContra_loss = inb_hisContra_loss_fct(inb_end_hisContra_logits, inb_hisContra_e_target)
-                inb_se_hisContra_loss = (inb_start_hisContra_loss + inb_end_hisContra_loss) / 2
-                total_loss = total_loss + inb_se_hisContra_loss * self.lambda_his_neg
-                #logger.info('inb_se_hisContra_loss: {}'.format(inb_se_hisContra_loss.item()))
-                logger.info('inb_se_hisContra_loss * self.lambda_his_neg: {}'.format((inb_se_hisContra_loss * self.lambda_his_neg).item()))
-
-
 
             # Cache pre-batch at the end
             if self.pre_batch is not None:
@@ -471,8 +391,6 @@ class Encoder(PreTrainedModel):
                 else:
                     self.pre_batch.append([gold_start.clone().detach(), gold_end.clone().detach()])
 
-            logger.info('total_loss: {}'.format(total_loss.item()))
-            logger.info('====================')
             outputs = (total_loss,) + outputs
         
         return outputs  # (loss), start_logits, end_logits, filter_start_logits, filter_end_logits

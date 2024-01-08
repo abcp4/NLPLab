@@ -242,9 +242,8 @@ class MIPS(object):
 
         return b_start_doc_idxs, b_start_idxs, start_I, b_end_doc_idxs, b_end_idxs, end_I, b_start_scores, b_end_scores
 
-    # TODO) top_k=5 (default: top_k=10)
     def search_phrase(self, query, start_doc_idxs, start_idxs, orig_start_idxs, end_doc_idxs, end_idxs, orig_end_idxs,
-            start_scores, end_scores, top_k=10, max_answer_length=30, return_vecs=False, return_sent=False):
+            start_scores, end_scores, top_k=10, max_answer_length=10, return_vecs=False, return_sent=False):
 
         # Reshape for phrase
         num_queries = query.shape[0]
@@ -425,25 +424,21 @@ class MIPS(object):
                 if not get_from_hdf5:
                     start_vecs = start_vecs.dot(self.R.cpu().numpy())
                     end_vecs = end_vecs.dot(self.R.cpu().numpy())
-        try:
-            out = [{
-                'context': groups_all[doc_idx]['context'], 'title': [groups_all[doc_idx]['title']], 'doc_idx': doc_idx,
-                'start_pos': groups_all[doc_idx]['word2char_start'][groups_all[doc_idx]['f2o_start'][start_idx]].item(),
-                'end_pos': (groups_all[doc_idx]['word2char_end'][groups_all[doc_idx]['f2o_start'][end_idx]].item()
-                    if (len(groups_all[doc_idx]['word2char_end']) > 0) and (end_idx >= 0)
-                    else groups_all[doc_idx]['word2char_start'][groups_all[doc_idx]['f2o_start'][start_idx]].item() + 1),
-                'start_idx': start_idx, 'end_idx': end_idx, 'score': score,
-                'start_vec': start_vecs[group_idx] if return_vecs else None,
-                'end_vec': end_vecs[group_idx] if return_vecs else None,
-                } if doc_idx >= 0 else {
-                    'score': -1e8, 'context': 'dummy', 'start_pos': 0, 'end_pos': 0, 'title': ['']}
-                for group_idx, (doc_idx, start_idx, end_idx, score) in enumerate(zip(
-                    doc_idxs.tolist(), start_idxs.tolist(), end_idxs.tolist(), max_scores.tolist()))
-            ]
-        except:
-            #import pdb; pdb.set_trace()
-            print('dummy!')
-            out = [{'score': -1e8, 'context': 'dummy', 'start_pos': 0, 'end_pos': 0, 'title': ['']}]
+
+        out = [{
+            'context': groups_all[doc_idx]['context'], 'title': [groups_all[doc_idx]['title']], 'doc_idx': doc_idx,
+            'start_pos': groups_all[doc_idx]['word2char_start'][groups_all[doc_idx]['f2o_start'][start_idx]].item(),
+            'end_pos': (groups_all[doc_idx]['word2char_end'][groups_all[doc_idx]['f2o_start'][end_idx]].item()
+                if (len(groups_all[doc_idx]['word2char_end']) > 0) and (end_idx >= 0)
+                else groups_all[doc_idx]['word2char_start'][groups_all[doc_idx]['f2o_start'][start_idx]].item() + 1),
+            'start_idx': start_idx, 'end_idx': end_idx, 'score': score,
+            'start_vec': start_vecs[group_idx] if return_vecs else None,
+            'end_vec': end_vecs[group_idx] if return_vecs else None,
+            } if doc_idx >= 0 else {
+                'score': -1e8, 'context': 'dummy', 'start_pos': 0, 'end_pos': 0, 'title': ['']}
+            for group_idx, (doc_idx, start_idx, end_idx, score) in enumerate(zip(
+                doc_idxs.tolist(), start_idxs.tolist(), end_idxs.tolist(), max_scores.tolist()))
+        ]
 
         for each in out:
             each['answer'] = each['context'][each['start_pos']:each['end_pos']]
@@ -491,11 +486,11 @@ class MIPS(object):
         results = sorted(results, key=lambda each_out: -each_out['score'])
         results = list(filter(lambda x: x['score'] > -1e5, results)) # not exactly top-k but will be cut during evaluation
         return results
-    #10
+
     def search(self, query, q_texts=None,
                nprobe=256, top_k=10,
                aggregate=False, return_vecs=False,
-               max_answer_length=30, agg_strat='opt1', return_sent=False):
+               max_answer_length=10, agg_strat='opt1', return_sent=False):
 
         # MIPS on start/end
         start_time = time()

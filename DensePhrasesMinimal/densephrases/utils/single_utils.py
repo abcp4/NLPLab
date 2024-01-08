@@ -99,7 +99,6 @@ def load_encoder(device, args, phrase_only=False, query_only=False, freeze_embed
         pretrained=copy.deepcopy(pretrained) if pretrained is not None else None,
         lambda_kl=getattr(args, 'lambda_kl', 0.0),
         lambda_neg=getattr(args, 'lambda_neg', 0.0),
-        lambda_his_neg=getattr(args, 'lambda_his_neg', 0.0),
         lambda_flt=getattr(args, 'lambda_flt', 0.0),
         pbn_size=getattr(args, 'pbn_size', 0.0),
         return_phrase=phrase_only,

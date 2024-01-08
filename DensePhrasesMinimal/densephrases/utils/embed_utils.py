@@ -367,7 +367,7 @@ def convert_questions_to_features(
     return features, dataset
 
 
-def get_question_dataloader(questions, tokenizer, max_query_length=128, batch_size=64): #64
+def get_question_dataloader(questions, tokenizer, max_query_length=64, batch_size=64):
     examples = [{'qas_id': q_idx, 'question_text': q} for q_idx, q in enumerate(questions)]
     features, dataset = convert_questions_to_features(
         examples=examples,

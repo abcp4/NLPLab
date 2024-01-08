@@ -100,11 +100,8 @@ def load_qa_pairs(data_path, args, q_idx=None, draft_num_examples=100, shuffle=F
     questions = []
     answers = []
     titles = []
-    #TODO) default: data = json.load(open(data_path))
-    with open(data_path, encoding='utf-8', errors='ignore') as json_file:
-        data = json.load(json_file)
-    for data_idx, item in enumerate(data['data']):
-        #import pdb; pdb.set_trace()
+    data = json.load(open(data_path))['data']
+    for data_idx, item in enumerate(data):
         if q_idx is not None:
             if data_idx != q_idx:
                 continue

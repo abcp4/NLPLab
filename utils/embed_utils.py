@@ -300,7 +300,7 @@ def write_phrases(all_examples, all_features, all_results, tokenizer, output_dum
     for k, v in b_stats.items():
         print(k, v)
     for k, v in stats.items():
-        print(k, v)
+        print(k, v) 
 
 
 def convert_question_to_feature(example, max_query_length):

@@ -71,7 +71,6 @@ class QuestionAnsweringTrainer(Trainer):
             self.compute_metrics = compute_metrics
 
         if self.post_process_function is not None and self.compute_metrics is not None:
-            #import pdb; pdb.set_trace()
             eval_preds, save_rate = self.post_process_function(
                 eval_examples, eval_dataset, output.predictions, filter_threshold=filter_threshold
             )

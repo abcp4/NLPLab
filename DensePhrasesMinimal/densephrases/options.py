@@ -34,15 +34,15 @@ class Options():
                         help="The output directory where the model checkpoints and predictions will be written.",)
         self.parser.add_argument("--max_seq_length", type=int, default=384,
                         help="The maximum total input sequence length after WordPiece tokenization. Sequences "
-                        "longer than this will be truncated, and sequences shorter than this will be padded.",) #384
+                        "longer than this will be truncated, and sequences shorter than this will be padded.",)
         self.parser.add_argument("--doc_stride", type=int, default=128,
                         help="When splitting up a long document into chunks, how much stride to take between chunks.",)
-        self.parser.add_argument("--max_query_length", type=int, default=128,
+        self.parser.add_argument("--max_query_length", type=int, default=64,
                         help="The maximum number of tokens for the question. Questions longer than this will "
-                        "be truncated to this length.",) #64
-        self.parser.add_argument("--max_answer_length", type=int, default=30,
+                        "be truncated to this length.",)
+        self.parser.add_argument("--max_answer_length", type=int, default=10,
                         help="The maximum length of an answer that can be generated. This is needed because the start "
-                        "and end predictions are not conditioned on one another.",) #10
+                        "and end predictions are not conditioned on one another.",)
         self.parser.add_argument("--do_lower_case", action="store_true",
                         help="Set this flag if you are using an uncased model.")
 
@@ -108,7 +108,6 @@ class Options():
         self.parser.add_argument("--do_filter_test", action="store_true", help="Whether to test filters.")
         self.parser.add_argument("--lambda_kl", default=0.0, type=float, help="Lambda for distillation")
         self.parser.add_argument("--lambda_neg", default=0.0, type=float, help="Lambda for in-batch negative")
-        self.parser.add_argument("--lambda_his_neg", default=0.0, type=float, help="Lambda for in-batch history negative") # TODO
         self.parser.add_argument("--lambda_flt", default=0.0, type=float, help="Lambda for filtering")
         self.parser.add_argument("--pbn_size", default=0, type=int, help="pre-batch negative size")
         self.parser.add_argument("--append_title", action="store_true", help="Whether to append title in context.")
@@ -240,21 +239,6 @@ class Options():
         if self.use_training_args:
             dph_opt = self.parser.parse_args()
             hf_parser = HfArgumentParser(TrainingArguments)
-            #disable fp16
-            # dph_opt.fp16 = False
-            # dph_opt.bf16 = False
-            # dph_opt.fp16_full_eval = False
-            # dph_opt.bf16_full_eval = False
-
-            # dph_opt.fp16_opt_level = 'O1'
-            # hf_parser.fp16 = None
-            # hf_parser.bf16 = None   
-            # hf_parser.fp16_full_eval = None
-            # hf_parser.bf16_full_eval = None
-
-            # print('dph_opt', dph_opt)
-            # print('hf_parser', hf_parser)
-
             opt, _ = hf_parser.parse_args_into_dataclasses(return_remaining_strings=True)
             opt.__dict__.update(dph_opt.__dict__)
         else:
